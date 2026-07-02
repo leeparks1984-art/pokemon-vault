@@ -36,7 +36,7 @@ export default function PokemonTracker() {
     localStorage.setItem("pokemon_collection", JSON.stringify(newCollection));
   };
 
-  // Upgraded OCR Text Filter Engine
+  // ADVANCED CARD DATA PARSER ENGINE
   const processImageText = async (imageSrc) => {
     setScanStatus("Analyzing text layout...");
     setRawScannedText("");
@@ -63,35 +63,43 @@ export default function PokemonTracker() {
         return;
       }
 
-      // Breakdown line filtering matrix
       const lines = extractedText.split("\n")
         .map(line => line.trim())
         .filter(line => line.length > 1);
       
-      // Parse Card Number Fraction (Checks for structural formats like 042/198, 4/102, or 121/200)
+      // 1. ROBUST CARD NUMBER PARSER
+      // Looks for digits separated by slashes, dashes, backslashes, vertical bars, or common misread letters like l, I, i, t
       let foundNumber = "";
-      const cardNumberRegex = /(\d+)\s*[\/\s-]\s*(\d+)/;
-      const numberMatch = extractedText.match(cardNumberRegex);
-      if (numberMatch) {
-        foundNumber = numberMatch[1]; 
+      const flexibleFractionRegex = /(\d+)\s*[\/\s\\\|lIit-]\s*(\d+)/;
+      const fractionMatch = extractedText.match(flexibleFractionRegex);
+
+      if (fractionMatch) {
+        foundNumber = fractionMatch[1]; // Pulls out the specific card card index safely
+      } else {
+        // Fallback: Scan lines from the bottom up to look for standalone small numbers near the set layout symbols
+        for (let i = lines.length - 1; i >= 0; i--) {
+          const lineNums = lines[i].match(/\b\d+\b/g);
+          // If a bottom line contains a standalone 1 to 3 digit number, target it as the collector number
+          if (lineNums && lineNums.length === 1 && lineNums[0].length <= 3) {
+            foundNumber = lineNums[0];
+            break;
+          }
+        }
       }
 
-      // Parse Card Identity Name (Forage top lines, avoiding standard system text clutter)
+      // 2. CARD NAME PARSER
       let foundName = "";
       const skipWords = ["hp", "basic", "stage", "trainer", "energy", "evolves", "pokemon", "item", "supporter", "vmax", "vstar", "illus", "rule", "weakness", "resistance", "retreat"];
       
       for (const line of lines) {
         const cleanLine = line.toLowerCase();
-        // Skip metadata lines, gameplay descriptions, or straight numeric vectors
         if (skipWords.some(word => cleanLine.includes(word)) || /^\d+$/.test(line) || cleanLine.length < 3) {
           continue;
         }
-        // Extract alpha-specific card name strings cleanly
         foundName = line.replace(/[^a-zA-Z\s-]/g, "").trim(); 
         if (foundName.length > 2) break;
       }
 
-      // Set input states to newly processed data points
       setSearchName(foundName || "");
       setSearchNumber(foundNumber || "");
       setScanStatus("");
@@ -99,7 +107,7 @@ export default function PokemonTracker() {
       if (!foundName && !foundNumber) {
         setError("Card texture read, but no database fields matched. Please fine-tune details manually below.");
       } else {
-        setError("AI Matrix parsing complete! Double check the fields below before adding to the archive.");
+        setError("AI Matrix parsing complete! Double check the fields below before adding to your vault portfolio.");
       }
     } catch (ocrError) {
       console.error(ocrError);
@@ -148,7 +156,7 @@ export default function PokemonTracker() {
     setCameraActive(false);
   };
 
-  // HIGH-PERFORMANCE PREPROCESSING FRAME CAPTURE (Crops and Increases Contrast)
+  // HIGH-PERFORMANCE PREPROCESSING FRAME CAPTURE
   const captureLiveFrame = async () => {
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
@@ -158,19 +166,19 @@ export default function PokemonTracker() {
       const vWidth = video.videoWidth || 640;
       const vHeight = video.videoHeight || 480;
 
-      // 1. Calculate the center crop bounding metrics matching our box guide template
-      const cropWidth = vWidth * 0.55; 
-      const cropHeight = vHeight * 0.75;
+      // WIDENED BOUNDING CROP: Expanded width (0.75) and height (0.88) to guarantee 
+      // the absolute outer margins (bottom left corners) do not get sliced off
+      const cropWidth = vWidth * 0.75; 
+      const cropHeight = vHeight * 0.88;
       const cropX = (vWidth - cropWidth) / 2;
       const cropY = (vHeight - cropHeight) / 2;
 
       canvas.width = cropWidth;
       canvas.height = cropHeight;
 
-      // 2. Transfer only the targeted card inner-frame bounding segment to canvas context
       context.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
 
-      // 3. Digital Preprocessing Filter Pass: Convert to High-Contrast Grayscale
+      // Balanced Contrast Pass: Boosts text separation without frying thin font vectors
       try {
         const imgData = context.getImageData(0, 0, cropWidth, cropHeight);
         const data = imgData.data;
@@ -180,28 +188,25 @@ export default function PokemonTracker() {
           const g = data[i + 1];
           const b = data[i + 2];
           
-          // Luma Grayscale transform formula
           let gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
           
-          // Amplify edge contrast variance (boost distances from mid-tone gray)
-          gray = 128 + 1.6 * (gray - 128);
-          gray = Math.max(0, Math.min(255, gray)); // Keep within absolute byte limits (0-255)
+          // Smoother balanced multiplier curve
+          gray = 128 + 1.3 * (gray - 128);
+          gray = Math.max(0, Math.min(255, gray)); 
           
-          data[i] = gray;     // Red channel
-          data[i + 1] = gray; // Green channel
-          data[i + 2] = gray; // Blue channel
+          data[i] = gray;     
+          data[i + 1] = gray; 
+          data[i + 2] = gray; 
         }
         context.putImageData(imgData, 0, 0);
       } catch (filterError) {
         console.warn("Pixel matrix filtering skipped on this device sandbox context:", filterError);
       }
 
-      // Convert the optimized black and white cropped preview to data asset string
       const filteredImageDataUrl = canvas.toDataURL("image/png");
       setCapturedImage(filteredImageDataUrl);
       stopLiveCamera();
       
-      // Feed the crispy optimized image to Tesseract
       await processImageText(filteredImageDataUrl);
     }
   };
@@ -300,7 +305,7 @@ export default function PokemonTracker() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans p-4 md:p-8">
-      <header className="max-w-6xl mx-auto mb-8 flex flex-col md:flex-row justify-between items-center border-b border-slate-800 pb-6 gap-4">
+      <header className="max-w-6xl mx-auto mb-8 flex flex-col md:flex-row justify-between items-between border-b border-slate-800 pb-6 gap-4">
         <div>
           <h1 className="text-3xl font-extrabold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">
             PokéVault
@@ -337,7 +342,6 @@ export default function PokemonTracker() {
               <Camera size={20} className="text-amber-400" /> Interactive Lens Viewport
             </h2>
 
-            {/* Viewfinder Window Frame */}
             <div className="relative w-full aspect-[4/3] bg-black rounded-xl overflow-hidden mb-4 border border-slate-700 flex items-center justify-center">
               <canvas ref={canvasRef} className="hidden" />
 
@@ -365,16 +369,15 @@ export default function PokemonTracker() {
                 className={`w-full h-full object-cover ${cameraActive ? "block" : "hidden"}`} 
               />
 
-              {/* Template Card Guides Layer Overlay */}
               {cameraActive && (
                 <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 pointer-events-none">
-                  <div className="w-44 aspect-[2.5/3.5] border-4 border-dashed border-amber-400 rounded-xl flex flex-col items-center justify-center bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
-                    <span className="text-[10px] text-amber-400 font-bold tracking-widest bg-slate-900/90 px-2 py-0.5 rounded shadow">ALIGN CARD</span>
+                  {/* Visually wider box matching our expanded tracking math layout */}
+                  <div className="w-52 aspect-[2.5/3.5] border-4 border-dashed border-amber-400 rounded-xl flex flex-col items-center justify-center bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
+                    <span className="text-[10px] text-amber-400 font-bold tracking-widest bg-slate-900/90 px-2 py-0.5 rounded shadow">ALIGN FULL CARD</span>
                   </div>
                 </div>
               )}
 
-              {/* Enhanced Visual Crop Analyzer Screen */}
               {!cameraActive && capturedImage && (
                 <div className="relative w-full h-full">
                   <img src={capturedImage} alt="Scanned card review" className="w-full h-full object-contain bg-slate-950" />
@@ -391,12 +394,11 @@ export default function PokemonTracker() {
               {!cameraActive && !capturedImage && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 p-6 text-center">
                   <p className="text-sm font-semibold">Inline Scanner Inactive</p>
-                  <p className="text-xs mt-1 text-slate-600">Tap 'Start Inline Scanner' to initialize stream and capture high-contrast card metrics.</p>
+                  <p className="text-xs mt-1 text-slate-600">Tap 'Start Inline Scanner' to render live camera feed with layout border templates.</p>
                 </div>
               )}
             </div>
 
-            {/* Operational Controls */}
             <div className="flex flex-col gap-2 mb-6">
               <button
                 type="button"
@@ -433,7 +435,6 @@ export default function PokemonTracker() {
               )}
             </div>
 
-            {/* Review Form Fields Mapping Context */}
             <form onSubmit={handleSearchAndAdd} className="space-y-4 pt-4 border-t border-slate-700">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
@@ -470,7 +471,7 @@ export default function PokemonTracker() {
               {rawScannedText && (
                 <div className="bg-slate-900 border border-slate-700 p-2.5 rounded-xl">
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Raw Filtered Text Stream Output:</p>
-                  <p className="text-[11px] text-slate-400 font-mono line-clamp-2 overflow-hidden italic">
+                  <p className="text-[11px] text-slate-400 font-mono line-clamp-3 overflow-hidden italic">
                     "{rawScannedText.trim()}"
                   </p>
                 </div>
@@ -488,7 +489,6 @@ export default function PokemonTracker() {
           </div>
         </div>
 
-        {/* Portfolio rendering columns */}
         <div className="lg:col-span-2 space-y-4">
           <h2 className="text-xl font-bold flex items-center gap-2 text-slate-200">
             <TrendingUp size={20} className="text-emerald-400" /> Collected Cards Archive
