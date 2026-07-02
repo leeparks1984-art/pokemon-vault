@@ -36,7 +36,7 @@ export default function PokemonTracker() {
     localStorage.setItem("pokemon_collection", JSON.stringify(newCollection));
   };
 
-  // OCR Parsing Architecture
+  // OCR Processing Logic
   const processImageText = async (imageSrc) => {
     setScanStatus("Analyzing text layout...");
     setRawScannedText("");
@@ -59,7 +59,7 @@ export default function PokemonTracker() {
 
       if (!extractedText || extractedText.trim().length < 5) {
         setScanStatus("");
-        setError("Could not read any clear text. Try placing the card closer to the center template outline.");
+        setError("Could not read clear text. Ensure the card is well-lit inside the border template.");
         return;
       }
 
@@ -91,18 +91,18 @@ export default function PokemonTracker() {
       setScanStatus("");
       
       if (!foundName && !foundNumber) {
-        setError("Text detected, but no valid card fields could be recognized. Feel free to adjust manually.");
+        setError("Text detected, but no valid fields matched. You can adjust them manually below.");
       } else {
-        setError("Card text parsed! Review fields below before saving.");
+        setError("Card text parsed! Verify the fields below before saving.");
       }
     } catch (ocrError) {
       console.error(ocrError);
       setScanStatus("");
-      setError("The scanning engine encountered an error. Please enter details manually.");
+      setError("The scanning engine encountered an error. Please type card details manually.");
     }
   };
 
-  // HYPER-RESILIENT LIVE CAMERA METHOD WITH AUTO-TIMEOUT FAILSAFE
+  // RESTORED: Original Simple Camera Stream
   const toggleLiveCamera = async () => {
     if (cameraActive) {
       stopLiveCamera();
@@ -110,50 +110,14 @@ export default function PokemonTracker() {
     }
 
     setCapturedImage(null);
-    setError("Waking up camera arrays...");
-
-    // Timeout safety configuration (Throws error if hardware freezes for > 4 seconds)
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("HardwareTimeout")), 4000)
-    );
+    setError("Waking up camera...");
 
     try {
-      const getCameraStream = async () => {
-        // Step 1: Request quick track clearance to unlock peripheral hardware descriptions
-        const initialStream = await navigator.mediaDevices.getUserMedia({ video: true });
-        initialStream.getTracks().forEach(track => track.stop());
-
-        // Step 2: Extract active video components available
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const videoDevices = devices.filter(device => device.kind === "videoinput");
-
-        if (videoDevices.length === 0) throw new Error("NoCameraHardware");
-
-        // Step 3: Parse for known rear-facing optical indicators
-        let targetDeviceId = videoDevices[0].deviceId;
-        const backCamera = videoDevices.find(device =>
-          device.label.toLowerCase().includes("back") ||
-          device.label.toLowerCase().includes("rear") ||
-          device.label.toLowerCase().includes("environment")
-        );
-
-        if (backCamera) {
-          targetDeviceId = backCamera.deviceId;
-        }
-
-        // Step 4: Stream using fluid 'ideal' parameters instead of strict locks
-        return await navigator.mediaDevices.getUserMedia({
-          video: {
-            deviceId: { ideal: targetDeviceId },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
-        });
-      };
-
-      // Race the hardware connection execution against our 4-second safety clock
-      const stream = await Promise.race([getCameraStream(), timeoutPromise]);
-
+      // Returned to the exact basic method that worked initially
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" }
+      });
+      
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
@@ -161,29 +125,9 @@ export default function PokemonTracker() {
         setError(null);
       }
     } catch (err) {
-      console.error("Primary hardware configuration lifecycle failure:", err);
-      stopLiveCamera();
-
-      // ULTIMATE FALLBACK: Try loading direct standard system environment streams
-      try {
-        setError("Primary setup timed out. Attempting simplified fallback initialization...");
-        const fallbackStream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" }
-        });
-        
-        if (videoRef.current) {
-          videoRef.current.srcObject = fallbackStream;
-          streamRef.current = fallbackStream;
-          setCameraActive(true);
-          setError(null);
-        }
-      } catch (finalErr) {
-        console.error("All inline stream pathways blocked:", finalErr);
-        setError(
-          "Inline camera streaming is restricted by your device's current security sandbox. Please use the gray 'Launch Phone Camera App' backup button right below."
-        );
-        setCameraActive(false);
-      }
+      console.error("Camera streaming failed:", err);
+      setError("Could not open inline video stream. Use the alternative 'Launch Phone Camera App' button below.");
+      setCameraActive(false);
     }
   };
 
@@ -215,7 +159,7 @@ export default function PokemonTracker() {
     }
   };
 
-  // Native File Picker stream handler
+  // Backup Native Camera File Handler
   const handleNativeCameraCapture = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -236,7 +180,7 @@ export default function PokemonTracker() {
   const handleSearchAndAdd = async (e) => {
     e.preventDefault();
     if (!searchName) {
-      setError("Please input a card name to perform an API check.");
+      setError("A card name is required to fetch value metrics.");
       return;
     }
 
@@ -284,7 +228,7 @@ export default function PokemonTracker() {
         setCapturedImage(null);
         setRawScannedText("");
       } else {
-        setError(`No exact matches found for "${searchName}". Please check the spelling.`);
+        setError(`No matches discovered for "${searchName}". Check spelling and numbers.`);
       }
     } catch (err) {
       setError("Failed to fetch data from Pokémon TCG API. Check your internet connection.");
@@ -347,6 +291,7 @@ export default function PokemonTracker() {
               <Camera size={20} className="text-amber-400" /> Interactive Lens Viewport
             </h2>
 
+            {/* Viewfinder element wrapper */}
             <div className="relative w-full aspect-[4/3] bg-black rounded-xl overflow-hidden mb-4 border border-slate-700 flex items-center justify-center">
               <canvas ref={canvasRef} className="hidden" />
 
@@ -369,6 +314,7 @@ export default function PokemonTracker() {
               {cameraActive && (
                 <>
                   <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                  {/* Bounding Box Alignment Outline Template Overlaid on Top */}
                   <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 pointer-events-none">
                     <div className="w-44 aspect-[2.5/3.5] border-4 border-dashed border-amber-400 rounded-xl flex flex-col items-center justify-center bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
                       <span className="text-[10px] text-amber-400 font-bold tracking-widest bg-slate-900/90 px-2 py-0.5 rounded shadow">ALIGN CARD</span>
@@ -393,11 +339,12 @@ export default function PokemonTracker() {
               {!cameraActive && !capturedImage && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 p-6 text-center">
                   <p className="text-sm font-semibold">Inline Scanner Inactive</p>
-                  <p className="text-xs mt-1 text-slate-600">Tap 'Start Inline Scanner' to verify device lens integration parameters.</p>
+                  <p className="text-xs mt-1 text-slate-600">Tap 'Start Inline Scanner' to render live camera feed with layout border templates.</p>
                 </div>
               )}
             </div>
 
+            {/* Reorganized Operational Controls */}
             <div className="flex flex-col gap-2 mb-6">
               <button
                 type="button"
@@ -434,6 +381,7 @@ export default function PokemonTracker() {
               )}
             </div>
 
+            {/* Text Verification Form Input Fields */}
             <form onSubmit={handleSearchAndAdd} className="space-y-4 pt-4 border-t border-slate-700">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
