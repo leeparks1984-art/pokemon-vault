@@ -102,19 +102,46 @@ export default function PokemonTracker() {
     }
   };
 
-  // 1. HIGH-RELIABILITY INLINE LIVE CAMERA STREAM (Shows template border on page)
+  // ADVANCED HARDWARE-TARGETED INLINE STREAM (Bypasses multi-lens freeze bugs)
   const toggleLiveCamera = async () => {
     if (cameraActive) {
       stopLiveCamera();
     } else {
       try {
         setCapturedImage(null);
-        setError("Waking up device camera...");
+        setError("Querying device hardware for camera lenses...");
+
+        // Step 1: Request basic permission track to unlock camera device labels
+        const initialStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        initialStream.getTracks().forEach(track => track.stop());
+
+        // Step 2: List out all hardware media devices on the phone
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const videoDevices = devices.filter(device => device.kind === "videoinput");
+
+        if (videoDevices.length === 0) {
+          throw new Error("No camera hardware detected.");
+        }
+
+        // Step 3: Hunt for explicit rear-facing camera names
+        let targetDeviceId = videoDevices[0].deviceId; 
+        const backCamera = videoDevices.find(device => 
+          device.label.toLowerCase().includes("back") || 
+          device.label.toLowerCase().includes("rear") || 
+          device.label.toLowerCase().includes("environment")
+        );
+
+        if (backCamera) {
+          targetDeviceId = backCamera.deviceId;
+          console.log("Targeting specific rear lens ID:", backCamera.label);
+        }
+
+        setError("Connecting directly to target lens ID...");
         
-        // Mobile-friendly relaxed constraints to bypass multi-lens system freezes
+        // Step 4: Stream from the exact hardware ID discovered
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { 
-            facingMode: "environment" 
+            deviceId: { exact: targetDeviceId } 
           },
         });
         
@@ -125,9 +152,23 @@ export default function PokemonTracker() {
           setError(null);
         }
       } catch (err) {
-        console.error("Inline camera stream failed:", err);
-        setError("Could not open inline video stream. Use the alternative 'Launch Phone Camera App' button below.");
-        setCameraActive(false);
+        console.error("Lens targeting failed, dropping to basic fallback:", err);
+        
+        // Final absolute fallback string query loop
+        try {
+          const fallbackStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "environment" } 
+          });
+          if (videoRef.current) {
+            videoRef.current.srcObject = fallbackStream;
+            streamRef.current = fallbackStream;
+            setCameraActive(true);
+            setError(null);
+          }
+        } catch (finalErr) {
+          setError("Inline browser streaming blocked by system. Please tap the gray 'Launch Phone Camera App' button right below.");
+          setCameraActive(false);
+        }
       }
     }
   };
@@ -160,7 +201,7 @@ export default function PokemonTracker() {
     }
   };
 
-  // 2. OFF-PAGE NATIVE SYSTEM CAMERA FALLBACK (Launches external Android App)
+  // Native System Camera File Loader Receiver
   const handleNativeCameraCapture = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -292,7 +333,7 @@ export default function PokemonTracker() {
               <Camera size={20} className="text-amber-400" /> Interactive Lens Viewport
             </h2>
 
-            {/* Embedded Screen Window Container */}
+            {/* Viewfinder element wrapper */}
             <div className="relative w-full aspect-[4/3] bg-black rounded-xl overflow-hidden mb-4 border border-slate-700 flex items-center justify-center">
               <canvas ref={canvasRef} className="hidden" />
 
@@ -305,7 +346,6 @@ export default function PokemonTracker() {
                 className="hidden"
               />
 
-              {/* Status Loader Screen */}
               {scanStatus && (
                 <div className="absolute inset-0 bg-slate-950/80 z-20 flex flex-col items-center justify-center p-4 text-center">
                   <Loader2 className="w-8 h-8 text-amber-400 animate-spin mb-2" />
@@ -313,11 +353,9 @@ export default function PokemonTracker() {
                 </div>
               )}
 
-              {/* 1. True Inline Live Streaming view box */}
               {cameraActive && (
                 <>
                   <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                  {/* The On-Page CSS Outline Guide Box */}
                   <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 pointer-events-none">
                     <div className="w-44 aspect-[2.5/3.5] border-4 border-dashed border-amber-400 rounded-xl flex flex-col items-center justify-center bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
                       <span className="text-[10px] text-amber-400 font-bold tracking-widest bg-slate-900/90 px-2 py-0.5 rounded shadow">ALIGN CARD</span>
@@ -326,7 +364,6 @@ export default function PokemonTracker() {
                 </>
               )}
 
-              {/* 2. Photo Processing Frame Display */}
               {!cameraActive && capturedImage && (
                 <div className="relative w-full h-full">
                   <img src={capturedImage} alt="Scanned card review" className="w-full h-full object-contain bg-slate-950" />
@@ -340,19 +377,16 @@ export default function PokemonTracker() {
                 </div>
               )}
 
-              {/* 3. Empty Base Placeholder Screen */}
               {!cameraActive && !capturedImage && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 p-6 text-center">
                   <p className="text-sm font-semibold">Inline Scanner Inactive</p>
-                  <p className="text-xs mt-1 text-slate-600">Tap 'Start Inline Scanner' to display the card layout alignment guide directly on this page.</p>
+                  <p className="text-xs mt-1 text-slate-600">Tap 'Start Inline Scanner' to initialize direct hardware rendering with overlay guides.</p>
                 </div>
               )}
             </div>
 
-            {/* Reorganized Controller Buttons */}
+            {/* Operational Controls */}
             <div className="flex flex-col gap-2 mb-6">
-              
-              {/* PRIMARY OPTION: Start Inline Camera Shutter */}
               <button
                 type="button"
                 onClick={toggleLiveCamera}
@@ -366,23 +400,21 @@ export default function PokemonTracker() {
                 {cameraActive ? "Turn Off Inline Scanner" : "Start Inline Scanner (With Border Guide)"}
               </button>
 
-              {/* Snapshot trigger button for inline stream mode */}
               {cameraActive && (
                 <button
                   type="button"
                   onClick={captureLiveFrame}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-colors shadow-md uppercase tracking-wider"
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs mt-1 transition-colors shadow-md uppercase tracking-wider"
                 >
                   Snap Photo Inside Border
                 </button>
               )}
 
-              {/* BACKUP OPTION: System Level Shutter Button */}
               {!cameraActive && (
                 <button
                   type="button"
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 font-medium py-2 px-4 rounded-xl text-xs transition-colors mt-2 flex items-center justify-center gap-2"
+                  className="w-full bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 font-medium py-2 px-4 rounded-xl text-xs mt-2 flex items-center justify-center gap-2"
                 >
                   <Smartphone size={14} />
                   Backup: Launch Phone Camera App (No Border)
@@ -390,7 +422,7 @@ export default function PokemonTracker() {
               )}
             </div>
 
-            {/* Review Form */}
+            {/* Review and Query Form */}
             <form onSubmit={handleSearchAndAdd} className="space-y-4 pt-4 border-t border-slate-700">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
@@ -445,7 +477,7 @@ export default function PokemonTracker() {
           </div>
         </div>
 
-        {/* Portfolio view column */}
+        {/* Inventory View Column */}
         <div className="lg:col-span-2 space-y-4">
           <h2 className="text-xl font-bold flex items-center gap-2 text-slate-200">
             <TrendingUp size={20} className="text-emerald-400" /> Collected Cards Archive
