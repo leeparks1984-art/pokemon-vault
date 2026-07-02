@@ -36,7 +36,7 @@ export default function PokemonTracker() {
     localStorage.setItem("pokemon_collection", JSON.stringify(newCollection));
   };
 
-  // OCR Processing Logic
+  // Upgraded OCR Text Filter Engine
   const processImageText = async (imageSrc) => {
     setScanStatus("Analyzing text layout...");
     setRawScannedText("");
@@ -49,7 +49,7 @@ export default function PokemonTracker() {
         "eng",
         { logger: m => {
           if (m.status === "recognizing text") {
-            setScanStatus(`Reading card: ${Math.floor(m.progress * 100)}%`);
+            setScanStatus(`Reading card data: ${Math.floor(m.progress * 100)}%`);
           }
         }}
       );
@@ -57,52 +57,57 @@ export default function PokemonTracker() {
       const extractedText = result.data.text;
       setRawScannedText(extractedText);
 
-      if (!extractedText || extractedText.trim().length < 5) {
+      if (!extractedText || extractedText.trim().length < 3) {
         setScanStatus("");
-        setError("Could not read clear text. Ensure the card is well-lit inside the border template.");
+        setError("Could not isolate crisp text details. Hold the card completely still inside the guide outline.");
         return;
       }
 
-      const lines = extractedText.split("\n").map(line => line.trim()).filter(line => line.length > 2);
+      // Breakdown line filtering matrix
+      const lines = extractedText.split("\n")
+        .map(line => line.trim())
+        .filter(line => line.length > 1);
       
-      // Parse Card Number
+      // Parse Card Number Fraction (Checks for structural formats like 042/198, 4/102, or 121/200)
       let foundNumber = "";
-      const cardNumberRegex = /(\d+)\s*[\/\s]\s*(\d+)/;
+      const cardNumberRegex = /(\d+)\s*[\/\s-]\s*(\d+)/;
       const numberMatch = extractedText.match(cardNumberRegex);
       if (numberMatch) {
         foundNumber = numberMatch[1]; 
       }
 
-      // Parse Card Name
+      // Parse Card Identity Name (Forage top lines, avoiding standard system text clutter)
       let foundName = "";
-      const skipWords = ["hp", "basic", "stage", "trainer", "energy", "evolves", "pokemon", "item", "supporter", "vmax", "vstar", "illus", "rule"];
+      const skipWords = ["hp", "basic", "stage", "trainer", "energy", "evolves", "pokemon", "item", "supporter", "vmax", "vstar", "illus", "rule", "weakness", "resistance", "retreat"];
       
       for (const line of lines) {
         const cleanLine = line.toLowerCase();
-        if (skipWords.some(word => cleanLine.includes(word)) || /^\d+$/.test(line)) {
+        // Skip metadata lines, gameplay descriptions, or straight numeric vectors
+        if (skipWords.some(word => cleanLine.includes(word)) || /^\d+$/.test(line) || cleanLine.length < 3) {
           continue;
         }
+        // Extract alpha-specific card name strings cleanly
         foundName = line.replace(/[^a-zA-Z\s-]/g, "").trim(); 
         if (foundName.length > 2) break;
       }
 
+      // Set input states to newly processed data points
       setSearchName(foundName || "");
       setSearchNumber(foundNumber || "");
       setScanStatus("");
       
       if (!foundName && !foundNumber) {
-        setError("Text detected, but no valid fields matched. You can adjust them manually below.");
+        setError("Card texture read, but no database fields matched. Please fine-tune details manually below.");
       } else {
-        setError("Card text parsed! Verify the fields below before saving.");
+        setError("AI Matrix parsing complete! Double check the fields below before adding to the archive.");
       }
     } catch (ocrError) {
       console.error(ocrError);
       setScanStatus("");
-      setError("The scanning engine encountered an error. Please type card details manually.");
+      setError("Text processing timed out. Feel free to type card markers directly below.");
     }
   };
 
-  // Fixed Camera Stream Logic (Guaranteed DOM Reference connection)
   const toggleLiveCamera = async () => {
     if (cameraActive) {
       stopLiveCamera();
@@ -117,7 +122,6 @@ export default function PokemonTracker() {
         video: { facingMode: "environment" }
       });
       
-      // The video element is now permanently in the DOM layout, making this reference safe
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
@@ -125,11 +129,11 @@ export default function PokemonTracker() {
         setError(null);
       } else {
         stream.getTracks().forEach(track => track.stop());
-        setError("Viewfinder reference error. Please refresh and try again.");
+        setError("Viewfinder connection issue. Please refresh page.");
       }
     } catch (err) {
-      console.error("Camera streaming failed:", err);
-      setError("Could not open inline video stream. Use the alternative 'Launch Phone Camera App' button below.");
+      console.error(err);
+      setError("Inline camera streaming blocked. Use the phone camera app backup option below.");
       setCameraActive(false);
     }
   };
@@ -144,21 +148,61 @@ export default function PokemonTracker() {
     setCameraActive(false);
   };
 
+  // HIGH-PERFORMANCE PREPROCESSING FRAME CAPTURE (Crops and Increases Contrast)
   const captureLiveFrame = async () => {
     if (videoRef.current && canvasRef.current) {
       const video = videoRef.current;
       const canvas = canvasRef.current;
       const context = canvas.getContext("2d");
 
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const vWidth = video.videoWidth || 640;
+      const vHeight = video.videoHeight || 480;
 
-      const imageDataUrl = canvas.toDataURL("image/png");
-      setCapturedImage(imageDataUrl);
+      // 1. Calculate the center crop bounding metrics matching our box guide template
+      const cropWidth = vWidth * 0.55; 
+      const cropHeight = vHeight * 0.75;
+      const cropX = (vWidth - cropWidth) / 2;
+      const cropY = (vHeight - cropHeight) / 2;
+
+      canvas.width = cropWidth;
+      canvas.height = cropHeight;
+
+      // 2. Transfer only the targeted card inner-frame bounding segment to canvas context
+      context.drawImage(video, cropX, cropY, cropWidth, cropHeight, 0, 0, cropWidth, cropHeight);
+
+      // 3. Digital Preprocessing Filter Pass: Convert to High-Contrast Grayscale
+      try {
+        const imgData = context.getImageData(0, 0, cropWidth, cropHeight);
+        const data = imgData.data;
+        
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          
+          // Luma Grayscale transform formula
+          let gray = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+          
+          // Amplify edge contrast variance (boost distances from mid-tone gray)
+          gray = 128 + 1.6 * (gray - 128);
+          gray = Math.max(0, Math.min(255, gray)); // Keep within absolute byte limits (0-255)
+          
+          data[i] = gray;     // Red channel
+          data[i + 1] = gray; // Green channel
+          data[i + 2] = gray; // Blue channel
+        }
+        context.putImageData(imgData, 0, 0);
+      } catch (filterError) {
+        console.warn("Pixel matrix filtering skipped on this device sandbox context:", filterError);
+      }
+
+      // Convert the optimized black and white cropped preview to data asset string
+      const filteredImageDataUrl = canvas.toDataURL("image/png");
+      setCapturedImage(filteredImageDataUrl);
       stopLiveCamera();
       
-      await processImageText(imageDataUrl);
+      // Feed the crispy optimized image to Tesseract
+      await processImageText(filteredImageDataUrl);
     }
   };
 
@@ -182,7 +226,7 @@ export default function PokemonTracker() {
   const handleSearchAndAdd = async (e) => {
     e.preventDefault();
     if (!searchName) {
-      setError("A card name is required to fetch value metrics.");
+      setError("Please verify or enter a card name to pull value totals.");
       return;
     }
 
@@ -230,7 +274,7 @@ export default function PokemonTracker() {
         setCapturedImage(null);
         setRawScannedText("");
       } else {
-        setError(`No matches discovered for "${searchName}". Check spelling and numbers.`);
+        setError(`No unique database match discovered for "${searchName}". Try adjusting the spelling manually below.`);
       }
     } catch (err) {
       setError("Failed to fetch data from Pokémon TCG API. Check your internet connection.");
@@ -261,7 +305,7 @@ export default function PokemonTracker() {
           <h1 className="text-3xl font-extrabold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">
             PokéVault
           </h1>
-          <p className="text-slate-400 text-sm mt-1">AI Template Scanner & Value Tracker</p>
+          <p className="text-slate-400 text-sm mt-1">AI Preprocessing Template Scanner & Value Tracker</p>
         </div>
 
         <div className="flex gap-4">
@@ -293,7 +337,7 @@ export default function PokemonTracker() {
               <Camera size={20} className="text-amber-400" /> Interactive Lens Viewport
             </h2>
 
-            {/* Viewfinder element wrapper */}
+            {/* Viewfinder Window Frame */}
             <div className="relative w-full aspect-[4/3] bg-black rounded-xl overflow-hidden mb-4 border border-slate-700 flex items-center justify-center">
               <canvas ref={canvasRef} className="hidden" />
 
@@ -313,7 +357,6 @@ export default function PokemonTracker() {
                 </div>
               )}
 
-              {/* Permanently mounted video stream tag with autoplay, playsinline, and muted for mobile security overrides */}
               <video 
                 ref={videoRef} 
                 autoPlay 
@@ -322,7 +365,7 @@ export default function PokemonTracker() {
                 className={`w-full h-full object-cover ${cameraActive ? "block" : "hidden"}`} 
               />
 
-              {/* Bounding Box Alignment Outline Template Overlaid on Top */}
+              {/* Template Card Guides Layer Overlay */}
               {cameraActive && (
                 <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 pointer-events-none">
                   <div className="w-44 aspect-[2.5/3.5] border-4 border-dashed border-amber-400 rounded-xl flex flex-col items-center justify-center bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
@@ -331,6 +374,7 @@ export default function PokemonTracker() {
                 </div>
               )}
 
+              {/* Enhanced Visual Crop Analyzer Screen */}
               {!cameraActive && capturedImage && (
                 <div className="relative w-full h-full">
                   <img src={capturedImage} alt="Scanned card review" className="w-full h-full object-contain bg-slate-950" />
@@ -347,12 +391,12 @@ export default function PokemonTracker() {
               {!cameraActive && !capturedImage && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 p-6 text-center">
                   <p className="text-sm font-semibold">Inline Scanner Inactive</p>
-                  <p className="text-xs mt-1 text-slate-600">Tap 'Start Inline Scanner' to render live camera feed with layout border templates.</p>
+                  <p className="text-xs mt-1 text-slate-600">Tap 'Start Inline Scanner' to initialize stream and capture high-contrast card metrics.</p>
                 </div>
               )}
             </div>
 
-            {/* Reorganized Operational Controls */}
+            {/* Operational Controls */}
             <div className="flex flex-col gap-2 mb-6">
               <button
                 type="button"
@@ -389,7 +433,7 @@ export default function PokemonTracker() {
               )}
             </div>
 
-            {/* Verification Form Input Fields */}
+            {/* Review Form Fields Mapping Context */}
             <form onSubmit={handleSearchAndAdd} className="space-y-4 pt-4 border-t border-slate-700">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
@@ -397,7 +441,7 @@ export default function PokemonTracker() {
                 </label>
                 <input
                   type="text"
-                  placeholder="Awaiting text scan extraction..."
+                  placeholder="Awaiting clean text scan..."
                   value={searchName}
                   onChange={(e) => setSearchName(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-500 text-sm"
@@ -425,7 +469,7 @@ export default function PokemonTracker() {
 
               {rawScannedText && (
                 <div className="bg-slate-900 border border-slate-700 p-2.5 rounded-xl">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Raw Detected Text Output:</p>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Raw Filtered Text Stream Output:</p>
                   <p className="text-[11px] text-slate-400 font-mono line-clamp-2 overflow-hidden italic">
                     "{rawScannedText.trim()}"
                   </p>
@@ -444,6 +488,7 @@ export default function PokemonTracker() {
           </div>
         </div>
 
+        {/* Portfolio rendering columns */}
         <div className="lg:col-span-2 space-y-4">
           <h2 className="text-xl font-bold flex items-center gap-2 text-slate-200">
             <TrendingUp size={20} className="text-emerald-400" /> Collected Cards Archive
