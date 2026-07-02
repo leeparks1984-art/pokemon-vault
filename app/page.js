@@ -102,7 +102,7 @@ export default function PokemonTracker() {
     }
   };
 
-  // RESTORED: Original Simple Camera Stream
+  // Fixed Camera Stream Logic (Guaranteed DOM Reference connection)
   const toggleLiveCamera = async () => {
     if (cameraActive) {
       stopLiveCamera();
@@ -113,16 +113,19 @@ export default function PokemonTracker() {
     setError("Waking up camera...");
 
     try {
-      // Returned to the exact basic method that worked initially
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "environment" }
       });
       
+      // The video element is now permanently in the DOM layout, making this reference safe
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         streamRef.current = stream;
         setCameraActive(true);
         setError(null);
+      } else {
+        stream.getTracks().forEach(track => track.stop());
+        setError("Viewfinder reference error. Please refresh and try again.");
       }
     } catch (err) {
       console.error("Camera streaming failed:", err);
@@ -159,7 +162,6 @@ export default function PokemonTracker() {
     }
   };
 
-  // Backup Native Camera File Handler
   const handleNativeCameraCapture = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -311,16 +313,22 @@ export default function PokemonTracker() {
                 </div>
               )}
 
+              {/* Permanently mounted video stream tag with autoplay, playsinline, and muted for mobile security overrides */}
+              <video 
+                ref={videoRef} 
+                autoPlay 
+                playsInline 
+                muted
+                className={`w-full h-full object-cover ${cameraActive ? "block" : "hidden"}`} 
+              />
+
+              {/* Bounding Box Alignment Outline Template Overlaid on Top */}
               {cameraActive && (
-                <>
-                  <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                  {/* Bounding Box Alignment Outline Template Overlaid on Top */}
-                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 pointer-events-none">
-                    <div className="w-44 aspect-[2.5/3.5] border-4 border-dashed border-amber-400 rounded-xl flex flex-col items-center justify-center bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
-                      <span className="text-[10px] text-amber-400 font-bold tracking-widest bg-slate-900/90 px-2 py-0.5 rounded shadow">ALIGN CARD</span>
-                    </div>
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 pointer-events-none">
+                  <div className="w-44 aspect-[2.5/3.5] border-4 border-dashed border-amber-400 rounded-xl flex flex-col items-center justify-center bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
+                    <span className="text-[10px] text-amber-400 font-bold tracking-widest bg-slate-900/90 px-2 py-0.5 rounded shadow">ALIGN CARD</span>
                   </div>
-                </>
+                </div>
               )}
 
               {!cameraActive && capturedImage && (
@@ -381,7 +389,7 @@ export default function PokemonTracker() {
               )}
             </div>
 
-            {/* Text Verification Form Input Fields */}
+            {/* Verification Form Input Fields */}
             <form onSubmit={handleSearchAndAdd} className="space-y-4 pt-4 border-t border-slate-700">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
