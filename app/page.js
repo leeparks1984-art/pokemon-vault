@@ -36,7 +36,7 @@ export default function PokemonTracker() {
     localStorage.setItem("pokemon_collection", JSON.stringify(newCollection));
   };
 
-  // OCR Processing Logic
+  // OCR Parsing Architecture
   const processImageText = async (imageSrc) => {
     setScanStatus("Analyzing text layout...");
     setRawScannedText("");
@@ -102,73 +102,87 @@ export default function PokemonTracker() {
     }
   };
 
-  // ADVANCED HARDWARE-TARGETED INLINE STREAM (Bypasses multi-lens freeze bugs)
+  // HYPER-RESILIENT LIVE CAMERA METHOD WITH AUTO-TIMEOUT FAILSAFE
   const toggleLiveCamera = async () => {
     if (cameraActive) {
       stopLiveCamera();
-    } else {
-      try {
-        setCapturedImage(null);
-        setError("Querying device hardware for camera lenses...");
+      return;
+    }
 
-        // Step 1: Request basic permission track to unlock camera device labels
+    setCapturedImage(null);
+    setError("Waking up camera arrays...");
+
+    // Timeout safety configuration (Throws error if hardware freezes for > 4 seconds)
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error("HardwareTimeout")), 4000)
+    );
+
+    try {
+      const getCameraStream = async () => {
+        // Step 1: Request quick track clearance to unlock peripheral hardware descriptions
         const initialStream = await navigator.mediaDevices.getUserMedia({ video: true });
         initialStream.getTracks().forEach(track => track.stop());
 
-        // Step 2: List out all hardware media devices on the phone
+        // Step 2: Extract active video components available
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevices = devices.filter(device => device.kind === "videoinput");
 
-        if (videoDevices.length === 0) {
-          throw new Error("No camera hardware detected.");
-        }
+        if (videoDevices.length === 0) throw new Error("NoCameraHardware");
 
-        // Step 3: Hunt for explicit rear-facing camera names
-        let targetDeviceId = videoDevices[0].deviceId; 
-        const backCamera = videoDevices.find(device => 
-          device.label.toLowerCase().includes("back") || 
-          device.label.toLowerCase().includes("rear") || 
+        // Step 3: Parse for known rear-facing optical indicators
+        let targetDeviceId = videoDevices[0].deviceId;
+        const backCamera = videoDevices.find(device =>
+          device.label.toLowerCase().includes("back") ||
+          device.label.toLowerCase().includes("rear") ||
           device.label.toLowerCase().includes("environment")
         );
 
         if (backCamera) {
           targetDeviceId = backCamera.deviceId;
-          console.log("Targeting specific rear lens ID:", backCamera.label);
         }
 
-        setError("Connecting directly to target lens ID...");
-        
-        // Step 4: Stream from the exact hardware ID discovered
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { 
-            deviceId: { exact: targetDeviceId } 
-          },
+        // Step 4: Stream using fluid 'ideal' parameters instead of strict locks
+        return await navigator.mediaDevices.getUserMedia({
+          video: {
+            deviceId: { ideal: targetDeviceId },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        });
+      };
+
+      // Race the hardware connection execution against our 4-second safety clock
+      const stream = await Promise.race([getCameraStream(), timeoutPromise]);
+
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        streamRef.current = stream;
+        setCameraActive(true);
+        setError(null);
+      }
+    } catch (err) {
+      console.error("Primary hardware configuration lifecycle failure:", err);
+      stopLiveCamera();
+
+      // ULTIMATE FALLBACK: Try loading direct standard system environment streams
+      try {
+        setError("Primary setup timed out. Attempting simplified fallback initialization...");
+        const fallbackStream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" }
         });
         
         if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          streamRef.current = stream;
+          videoRef.current.srcObject = fallbackStream;
+          streamRef.current = fallbackStream;
           setCameraActive(true);
           setError(null);
         }
-      } catch (err) {
-        console.error("Lens targeting failed, dropping to basic fallback:", err);
-        
-        // Final absolute fallback string query loop
-        try {
-          const fallbackStream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "environment" } 
-          });
-          if (videoRef.current) {
-            videoRef.current.srcObject = fallbackStream;
-            streamRef.current = fallbackStream;
-            setCameraActive(true);
-            setError(null);
-          }
-        } catch (finalErr) {
-          setError("Inline browser streaming blocked by system. Please tap the gray 'Launch Phone Camera App' button right below.");
-          setCameraActive(false);
-        }
+      } catch (finalErr) {
+        console.error("All inline stream pathways blocked:", finalErr);
+        setError(
+          "Inline camera streaming is restricted by your device's current security sandbox. Please use the gray 'Launch Phone Camera App' backup button right below."
+        );
+        setCameraActive(false);
       }
     }
   };
@@ -201,7 +215,7 @@ export default function PokemonTracker() {
     }
   };
 
-  // Native System Camera File Loader Receiver
+  // Native File Picker stream handler
   const handleNativeCameraCapture = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -333,7 +347,6 @@ export default function PokemonTracker() {
               <Camera size={20} className="text-amber-400" /> Interactive Lens Viewport
             </h2>
 
-            {/* Viewfinder element wrapper */}
             <div className="relative w-full aspect-[4/3] bg-black rounded-xl overflow-hidden mb-4 border border-slate-700 flex items-center justify-center">
               <canvas ref={canvasRef} className="hidden" />
 
@@ -380,12 +393,11 @@ export default function PokemonTracker() {
               {!cameraActive && !capturedImage && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 p-6 text-center">
                   <p className="text-sm font-semibold">Inline Scanner Inactive</p>
-                  <p className="text-xs mt-1 text-slate-600">Tap 'Start Inline Scanner' to initialize direct hardware rendering with overlay guides.</p>
+                  <p className="text-xs mt-1 text-slate-600">Tap 'Start Inline Scanner' to verify device lens integration parameters.</p>
                 </div>
               )}
             </div>
 
-            {/* Operational Controls */}
             <div className="flex flex-col gap-2 mb-6">
               <button
                 type="button"
@@ -422,7 +434,6 @@ export default function PokemonTracker() {
               )}
             </div>
 
-            {/* Review and Query Form */}
             <form onSubmit={handleSearchAndAdd} className="space-y-4 pt-4 border-t border-slate-700">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
@@ -477,7 +488,6 @@ export default function PokemonTracker() {
           </div>
         </div>
 
-        {/* Inventory View Column */}
         <div className="lg:col-span-2 space-y-4">
           <h2 className="text-xl font-bold flex items-center gap-2 text-slate-200">
             <TrendingUp size={20} className="text-emerald-400" /> Collected Cards Archive
