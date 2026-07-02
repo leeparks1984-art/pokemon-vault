@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Camera, Trash2, Search, TrendingUp, DollarSign, Layers, Loader2, RefreshCw } from "lucide-react";
+import { Camera, Trash2, Search, TrendingUp, DollarSign, Layers, Loader2, RefreshCw, Smartphone } from "lucide-react";
 import Tesseract from "tesseract.js";
 
 export default function PokemonTracker() {
@@ -36,9 +36,9 @@ export default function PokemonTracker() {
     localStorage.setItem("pokemon_collection", JSON.stringify(newCollection));
   };
 
-  // Improved text reading and filtering logic
+  // OCR Processing Logic
   const processImageText = async (imageSrc) => {
-    setScanStatus("Analyzing image text structures...");
+    setScanStatus("Analyzing text layout...");
     setRawScannedText("");
     setSearchName("");
     setSearchNumber("");
@@ -49,7 +49,7 @@ export default function PokemonTracker() {
         "eng",
         { logger: m => {
           if (m.status === "recognizing text") {
-            setScanStatus(`Reading card data: ${Math.floor(m.progress * 100)}%`);
+            setScanStatus(`Reading card: ${Math.floor(m.progress * 100)}%`);
           }
         }}
       );
@@ -59,13 +59,13 @@ export default function PokemonTracker() {
 
       if (!extractedText || extractedText.trim().length < 5) {
         setScanStatus("");
-        setError("Could not read any clear text. Ensure the card is inside the template outline with good lighting.");
+        setError("Could not read any clear text. Try placing the card closer to the center template outline.");
         return;
       }
 
       const lines = extractedText.split("\n").map(line => line.trim()).filter(line => line.length > 2);
       
-      // Parse Card Number (looking for card fractions like 045/192 or 4/102)
+      // Parse Card Number
       let foundNumber = "";
       const cardNumberRegex = /(\d+)\s*[\/\s]\s*(\d+)/;
       const numberMatch = extractedText.match(cardNumberRegex);
@@ -73,68 +73,48 @@ export default function PokemonTracker() {
         foundNumber = numberMatch[1]; 
       }
 
-      // Parse Card Name (looking at the first clean readable text line near the top)
+      // Parse Card Name
       let foundName = "";
-      const skipWords = ["hp", "basic", "stage", "trainer", "energy", "evolves", "pokemon", "item", "supporter", "vmax", "vstar", "illus"];
+      const skipWords = ["hp", "basic", "stage", "trainer", "energy", "evolves", "pokemon", "item", "supporter", "vmax", "vstar", "illus", "rule"];
       
       for (const line of lines) {
         const cleanLine = line.toLowerCase();
         if (skipWords.some(word => cleanLine.includes(word)) || /^\d+$/.test(line)) {
           continue;
         }
-        // Remove weird symbols or glare glitches from the name line
         foundName = line.replace(/[^a-zA-Z\s-]/g, "").trim(); 
         if (foundName.length > 2) break;
       }
 
-      // Populate data fields with actual read values instead of old mock presets
       setSearchName(foundName || "");
       setSearchNumber(foundNumber || "");
-      
       setScanStatus("");
       
       if (!foundName && !foundNumber) {
-        setError("Text detected, but could not identify a valid card name or number format. Please adjust manually below.");
+        setError("Text detected, but no valid card fields could be recognized. Feel free to adjust manually.");
       } else {
-        setError("Card data parsed! Review the text fields below before committing to your archive.");
+        setError("Card text parsed! Review fields below before saving.");
       }
     } catch (ocrError) {
       console.error(ocrError);
       setScanStatus("");
-      setError("The text scanning engine encountered an error. Please enter card details manually.");
+      setError("The scanning engine encountered an error. Please enter details manually.");
     }
   };
 
-  const handleNativeCameraCapture = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setLoading(true);
-    setError(null);
-
-    const reader = new FileReader();
-    reader.onloadend = async () => {
-      const base64Image = reader.result;
-      setCapturedImage(base64Image);
-      setLoading(false);
-      await processImageText(base64Image);
-    };
-    reader.readAsDataURL(file);
-  };
-
+  // 1. HIGH-RELIABILITY INLINE LIVE CAMERA STREAM (Shows template border on page)
   const toggleLiveCamera = async () => {
     if (cameraActive) {
       stopLiveCamera();
     } else {
       try {
         setCapturedImage(null);
-        setError("Initializing live camera stream...");
+        setError("Waking up device camera...");
         
+        // Mobile-friendly relaxed constraints to bypass multi-lens system freezes
         const stream = await navigator.mediaDevices.getUserMedia({
           video: { 
-            facingMode: "environment",
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
+            facingMode: "environment" 
           },
         });
         
@@ -145,7 +125,8 @@ export default function PokemonTracker() {
           setError(null);
         }
       } catch (err) {
-        setError("Live streaming unavailable. Use the 'Take Photo with Phone Camera' module.");
+        console.error("Inline camera stream failed:", err);
+        setError("Could not open inline video stream. Use the alternative 'Launch Phone Camera App' button below.");
         setCameraActive(false);
       }
     }
@@ -179,10 +160,28 @@ export default function PokemonTracker() {
     }
   };
 
+  // 2. OFF-PAGE NATIVE SYSTEM CAMERA FALLBACK (Launches external Android App)
+  const handleNativeCameraCapture = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setLoading(true);
+    setError(null);
+
+    const reader = new FileReader();
+    reader.onloadend = async () => {
+      const base64Image = reader.result;
+      setCapturedImage(base64Image);
+      setLoading(false);
+      await processImageText(base64Image);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleSearchAndAdd = async (e) => {
     e.preventDefault();
     if (!searchName) {
-      setError("A valid card name is required to run a market pricing search.");
+      setError("Please input a card name to perform an API check.");
       return;
     }
 
@@ -230,7 +229,7 @@ export default function PokemonTracker() {
         setCapturedImage(null);
         setRawScannedText("");
       } else {
-        setError(`No exact match discovered for "${searchName}" on the network. Try adjusting the spelling.`);
+        setError(`No exact matches found for "${searchName}". Please check the spelling.`);
       }
     } catch (err) {
       setError("Failed to fetch data from Pokémon TCG API. Check your internet connection.");
@@ -256,7 +255,6 @@ export default function PokemonTracker() {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans p-4 md:p-8">
-      {/* Header Banner */}
       <header className="max-w-6xl mx-auto mb-8 flex flex-col md:flex-row justify-between items-center border-b border-slate-800 pb-6 gap-4">
         <div>
           <h1 className="text-3xl font-extrabold bg-gradient-to-r from-yellow-400 to-amber-500 bg-clip-text text-transparent">
@@ -291,10 +289,10 @@ export default function PokemonTracker() {
         <div className="lg:col-span-1 space-y-6">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-5 shadow-xl">
             <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-slate-200">
-              <Camera size={20} className="text-amber-400" /> Card Alignment Scanner
+              <Camera size={20} className="text-amber-400" /> Interactive Lens Viewport
             </h2>
 
-            {/* Viewfinder Window Frame with Visual Card Guide Template Overlay */}
+            {/* Embedded Screen Window Container */}
             <div className="relative w-full aspect-[4/3] bg-black rounded-xl overflow-hidden mb-4 border border-slate-700 flex items-center justify-center">
               <canvas ref={canvasRef} className="hidden" />
 
@@ -307,7 +305,7 @@ export default function PokemonTracker() {
                 className="hidden"
               />
 
-              {/* Loader/Scanner Processing Layer */}
+              {/* Status Loader Screen */}
               {scanStatus && (
                 <div className="absolute inset-0 bg-slate-950/80 z-20 flex flex-col items-center justify-center p-4 text-center">
                   <Loader2 className="w-8 h-8 text-amber-400 animate-spin mb-2" />
@@ -315,78 +313,84 @@ export default function PokemonTracker() {
                 </div>
               )}
 
-              {/* Live Streaming Video Elements */}
+              {/* 1. True Inline Live Streaming view box */}
               {cameraActive && (
                 <>
                   <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
-                  {/* CSS Overlay Card Border Template */}
-                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/40 pointer-events-none">
-                    <div className="w-48 aspect-[2.5/3.5] border-4 border-dashed border-yellow-400 rounded-xl shadow-[0_0_0_9999px_rgba(0,0,0,0.5)] flex flex-col items-center justify-center">
-                      <span className="text-[10px] text-yellow-400 font-bold tracking-widest uppercase bg-slate-900/80 px-1.5 py-0.5 rounded">Fit Card Here</span>
+                  {/* The On-Page CSS Outline Guide Box */}
+                  <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/30 pointer-events-none">
+                    <div className="w-44 aspect-[2.5/3.5] border-4 border-dashed border-amber-400 rounded-xl flex flex-col items-center justify-center bg-transparent shadow-[0_0_0_9999px_rgba(0,0,0,0.5)]">
+                      <span className="text-[10px] text-amber-400 font-bold tracking-widest bg-slate-900/90 px-2 py-0.5 rounded shadow">ALIGN CARD</span>
                     </div>
                   </div>
                 </>
               )}
 
-              {/* Staged Snapshot Presentation Element */}
+              {/* 2. Photo Processing Frame Display */}
               {!cameraActive && capturedImage && (
                 <div className="relative w-full h-full">
-                  <img src={capturedImage} alt="Scanned file display" className="w-full h-full object-contain bg-slate-950" />
+                  <img src={capturedImage} alt="Scanned card review" className="w-full h-full object-contain bg-slate-950" />
                   <button 
                     type="button" 
                     onClick={clearStagedImage}
-                    className="absolute top-2 right-2 bg-slate-900/80 hover:bg-slate-800 text-slate-300 p-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 border border-slate-700"
+                    className="absolute top-2 right-2 bg-slate-900/90 hover:bg-slate-800 text-slate-200 px-2 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 border border-slate-700 shadow"
                   >
-                    <RefreshCw size={12} /> Reset Image
+                    <RefreshCw size={12} /> Reset Canvas
                   </button>
                 </div>
               )}
 
-              {/* Empty Base State View */}
+              {/* 3. Empty Base Placeholder Screen */}
               {!cameraActive && !capturedImage && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 p-4 text-center">
-                  <p className="text-sm font-semibold">No Card Staged</p>
-                  <p className="text-xs mt-1 text-slate-600">Align your card inside the lens box layout framework using the buttons below.</p>
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-500 p-6 text-center">
+                  <p className="text-sm font-semibold">Inline Scanner Inactive</p>
+                  <p className="text-xs mt-1 text-slate-600">Tap 'Start Inline Scanner' to display the card layout alignment guide directly on this page.</p>
                 </div>
               )}
             </div>
 
-            {/* Core Scanner Operational Controls */}
+            {/* Reorganized Controller Buttons */}
             <div className="flex flex-col gap-2 mb-6">
-              <button
-                type="button"
-                disabled={!!scanStatus}
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-slate-950 font-bold py-3 px-4 rounded-xl text-sm transition-colors duration-200 shadow-md flex items-center justify-center gap-2"
-              >
-                <Camera size={18} />
-                Take Photo with Phone Camera
-              </button>
-
+              
+              {/* PRIMARY OPTION: Start Inline Camera Shutter */}
               <button
                 type="button"
                 onClick={toggleLiveCamera}
-                className={`py-2 px-4 rounded-xl font-medium text-xs transition-colors mt-1 border flex items-center justify-center gap-2 ${
+                className={`w-full font-bold py-3 px-4 rounded-xl text-sm transition-all duration-200 shadow-md flex items-center justify-center gap-2 ${
                   cameraActive
-                    ? "bg-rose-600/20 border-rose-500/40 text-rose-400"
-                    : "bg-slate-900 border-slate-700 text-slate-400"
+                    ? "bg-rose-600 hover:bg-rose-700 text-white"
+                    : "bg-gradient-to-r from-yellow-400 to-amber-500 text-slate-950 hover:from-yellow-500 hover:to-amber-600"
                 }`}
               >
-                {cameraActive ? "Turn Off Live Stream" : "Toggle Live Template Guide Mode"}
+                <Camera size={18} />
+                {cameraActive ? "Turn Off Inline Scanner" : "Start Inline Scanner (With Border Guide)"}
               </button>
 
+              {/* Snapshot trigger button for inline stream mode */}
               {cameraActive && (
                 <button
                   type="button"
                   onClick={captureLiveFrame}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs mt-1 transition-colors shadow-md"
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-colors shadow-md uppercase tracking-wider"
                 >
-                  Snap Filtered Frame inside Template
+                  Snap Photo Inside Border
+                </button>
+              )}
+
+              {/* BACKUP OPTION: System Level Shutter Button */}
+              {!cameraActive && (
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 font-medium py-2 px-4 rounded-xl text-xs transition-colors mt-2 flex items-center justify-center gap-2"
+                >
+                  <Smartphone size={14} />
+                  Backup: Launch Phone Camera App (No Border)
                 </button>
               )}
             </div>
 
-            {/* Verification Form Layer */}
+            {/* Review Form */}
             <form onSubmit={handleSearchAndAdd} className="space-y-4 pt-4 border-t border-slate-700">
               <div>
                 <label className="block text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1">
@@ -394,7 +398,7 @@ export default function PokemonTracker() {
                 </label>
                 <input
                   type="text"
-                  placeholder="No data read yet..."
+                  placeholder="Awaiting text scan extraction..."
                   value={searchName}
                   onChange={(e) => setSearchName(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-2.5 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-amber-500 text-sm"
@@ -420,12 +424,11 @@ export default function PokemonTracker() {
                 </div>
               )}
 
-              {/* Debug window highlighting what letters Tesseract detected */}
               {rawScannedText && (
                 <div className="bg-slate-900 border border-slate-700 p-2.5 rounded-xl">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Raw OCR Text Stream Output:</p>
-                  <p className="text-[11px] text-slate-400 font-mono line-clamp-3 overflow-hidden italic">
-                    {rawScannedText.trim() ? `"${rawScannedText.substring(0, 150).trim()}..."` : "[Blank Image Structure]"}
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Raw Detected Text Output:</p>
+                  <p className="text-[11px] text-slate-400 font-mono line-clamp-2 overflow-hidden italic">
+                    "{rawScannedText.trim()}"
                   </p>
                 </div>
               )}
@@ -433,16 +436,16 @@ export default function PokemonTracker() {
               <button
                 type="submit"
                 disabled={loading || !!scanStatus}
-                className="w-full bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-500 hover:to-amber-600 text-slate-950 font-bold py-3 px-4 rounded-xl text-sm shadow-md transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-bold py-3 px-4 rounded-xl text-sm shadow-md transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 <Search size={16} />
-                {loading ? "Adding to Vault Portfolio..." : "Search & Add Card"}
+                {loading ? "Adding to Vault Portfolio..." : "Confirm & Save Card"}
               </button>
             </form>
           </div>
         </div>
 
-        {/* Inventory list section */}
+        {/* Portfolio view column */}
         <div className="lg:col-span-2 space-y-4">
           <h2 className="text-xl font-bold flex items-center gap-2 text-slate-200">
             <TrendingUp size={20} className="text-emerald-400" /> Collected Cards Archive
@@ -451,7 +454,7 @@ export default function PokemonTracker() {
           {collection.length === 0 ? (
             <div className="bg-slate-800/40 border border-dashed border-slate-700 rounded-2xl p-12 text-center text-slate-500">
               <p className="text-base font-medium">Your PokéVault is currently empty.</p>
-              <p className="text-xs mt-1">Align your card within the template guide marker or fill out fields to generate portfolio worth vectors.</p>
+              <p className="text-xs mt-1">Use the active inline scanner grid view to process real physical card objects.</p>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
